@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Manifest IDE Syntax Highlighting ── */
+.tok-header { color: #0369a1; font-weight: 700; }
+.tok-header-value { color: #0f766e; }
+.tok-op-name { color: #2563eb; font-weight: 700; }
+.tok-type-value { color: #059669; }
+.tok-field { color: #b45309; font-weight: 600; }
+.tok-string { color: #16a34a; }
+.tok-keyword { color: #0369a1; }
+.tok-number { color: #0891b2; }
+.tok-paren { color: #6b7280; }
+.tok-bracket { color: #6b7280; }
+.tok-arrow { color: #0369a1; font-weight: 700; }
+.tok-comment { color: #9ca3af; font-style: italic; }
+
+/* ── IDE Editor Font ── */
+.ide-editor pre,
+.ide-editor textarea {
+  font-family: 'Courier New', Courier, Consolas, 'Cascadia Code', monospace;
+  font-size: 13px;
+}

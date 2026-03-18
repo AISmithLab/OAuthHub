@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Notability (OAuthHub Demo)",
+    "slug": "notability-oauthub-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "notability-oauthub-demo",
+    "android": {
+      "package": "com.oauthub.demo.notability",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "notability-oauthub-demo" }],
+          "category": ["DEFAULT", "BROWSABLE"]
+        }
+      ]
+    },
+    "plugins": ["expo-sqlite", "expo-document-picker", "expo-file-system", "expo-asset", "expo-font"]
+  }
+}

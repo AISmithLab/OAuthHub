@@ -1,0 +1,14 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "~/core/*": ["./src/core/*"],
+      "~/platform/*": ["./src/platform/*"],
+      "~/ipc/*": ["./src/ipc/*"],
+      "~/screens/*": ["./src/screens/*"],
+      "~/components/*": ["./src/components/*"],
+      "~/navigation/*": ["./src/navigation/*"]
+    }
+  }
+}

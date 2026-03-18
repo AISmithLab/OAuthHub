@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Zoom (OAuthHub Demo)",
+    "slug": "zoom-oauthub-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "zoom-oauthub-demo",
+    "android": {
+      "package": "com.oauthub.demo.zoom",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "zoom-oauthub-demo" }],
+          "category": ["DEFAULT", "BROWSABLE"]
+        }
+      ]
+    },
+    "plugins": ["expo-sqlite", "expo-asset", "expo-font"]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "OAuthHub",
+  "version": "1.0",
+  "description": "A local OAuth authorization service",
+  "permissions": [
+    "storage",
+    "tabs",
+    "contextMenus",
+    "webNavigation",
+    "identity",
+    "alarms"
+  ],
+  "action": {
+    "default_popup": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://gmail.googleapis.com/*",
+    "https://forms.googleapis.com/*",
+    "https://oauth2.googleapis.com/*",
+    "http://localhost/*",
+    "https://localhost/*",
+    "https://*.artifacts.measurement.network/*"
+  ],
+  "icons": {
+    "16": "icon_16x16.png",
+    "32": "icon_32x32.png",
+    "48": "icon_48x48.png",
+    "128": "icon_128x128.png"
+  },
+  "oauth2": {
+    "client_id": "535420880881-qrahtvmoq7011ntkretsu5as8hhkhlng.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/calendar.events.readonly",
+      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/forms.responses.readonly"
+    ]
+  },
+  "externally_connectable": {
+    "matches": ["http://localhost/*", "https://localhost/*", "https://*.artifacts.measurement.network/*"]
+  },
+  "web_accessible_resources": [{
+    "resources": ["index.html", "oauth-callback.html", "*.png", "*.svg"],
+    "matches": ["http://localhost/*", "https://localhost/*", "https://*.artifacts.measurement.network/*"]
+  }],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmGkEEkAX86xDeGIfNNEugLLVT0NnzZRF3fKt4o3i2KlbKcFhTLDcqSXQtOZk+haB/YMWt0J3Gvx/PBjBytX2RcpygsrRd0z7SZ0MYUuOZAeWxfi57Gr3PSe66Lcp5fZQsg7m/mnqP2lpn55SPBKzpGidPvpdCBRGvf5X2kmA9VuyKY7nmbibVTYmRL9qJkJ55xT44q4ADX8LNCZ08FakJGOIsajE6bLwzgwZCVs71GCOFPt1IbM71n61zyMw6I3HFRbgI6yx+jEFo/E7eBrbAsDaKIcowtnGbPE1CON4MODyojXFBLnZmDhzy2pjelhUuRHzFbC0qtMxQmq+oJ887QIDAQAB"
+}

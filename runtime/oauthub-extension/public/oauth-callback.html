@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>OAuth Callback - OAuthHub</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2D8CFF;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #f5c6cb;
+            margin-top: 20px;
+        }
+        .success {
+            color: #27ae60;
+            background: #f2fdf2;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #c6f5c6;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Processing Authorization...</h2>
+        <div class="spinner"></div>
+        <p id="status">Exchanging authorization code for tokens...</p>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        (async function() {
+            const statusElement = document.getElementById('status');
+            const resultElement = document.getElementById('result');
+            
+            try {
+                // Parse URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                const error = urlParams.get('error');
+                const sessionId = urlParams.get('session_id') || localStorage.getItem('oauth_session_id');
+                
+                if (error) {
+                    throw new Error(`Authorization failed: ${error} - ${urlParams.get('error_description') || 'Unknown error'}`);
+                }
+                
+                if (!code) {
+                    throw new Error('No authorization code received');
+                }
+                
+                if (!state) {
+                    throw new Error('No state parameter received');
+                }
+                
+                if (!sessionId) {
+                    throw new Error('No session ID found');
+                }
+                
+                statusElement.textContent = 'Validating authorization...';
+                
+                // Send to background script for token exchange
+                const response = await chrome.runtime.sendMessage({
+                    type: 'GOOGLE_OAUTH_CALLBACK',
+                    data: {
+                        code: code,
+                        state: state,
+                        sessionId: sessionId
+                    }
+                });
+                
+                if (response.success) {
+                    statusElement.textContent = 'Authorization successful!';
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'success';
+                    successDiv.textContent = 'Successfully authorized with Google. You can close this window.';
+                    resultElement.textContent = '';
+                    resultElement.appendChild(successDiv);
+
+                    // Close window after short delay
+                    setTimeout(() => {
+                        window.close();
+                    }, 2000);
+                } else {
+                    throw new Error(response.error || 'Token exchange failed');
+                }
+
+            } catch (error) {
+                console.error('OAuth callback error:', error);
+                statusElement.textContent = 'Authorization failed';
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.textContent = 'Error: ' + error.message;
+                resultElement.textContent = '';
+                resultElement.appendChild(errorDiv);
+                
+                // Auto-close on error after delay
+                setTimeout(() => {
+                    window.close();
+                }, 5000);
+            }
+        })();
+    </script>
+</body>
+</html>
