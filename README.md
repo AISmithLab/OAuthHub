@@ -93,6 +93,26 @@ const { body, signature } = await OAuthHubClient.verifySignedPayload({
 });
 ```
 
+### Citation
+
+If you use OAuthHub in your research, please cite our paper:
+
+```bibtex
+@misc{li2026oauthhubmitigatingoauthdata,
+      title={OAuthHub: Mitigating OAuth Data Overaccess through a Local Data Hub}, 
+      author={Qiyu Li and Yuhe Tian and Haojian Jin},
+      year={2026},
+      eprint={2603.10056},
+      archivePrefix={arXiv},
+      primaryClass={cs.CR},
+      url={https://arxiv.org/abs/2603.10056}, 
+}
+```
+
+### License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
 ### Project Structure
 
 ```
