@@ -193,3 +193,6 @@ export class HttpServer {
     }
   }
 }
+
+// Singleton instance shared between App and HeadlessJS handler
+export const httpServer = new HttpServer();

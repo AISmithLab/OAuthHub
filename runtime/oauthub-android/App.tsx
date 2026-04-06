@@ -4,14 +4,12 @@ import { View, Text, StyleSheet, Platform, PermissionsAndroid } from 'react-nati
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import AppNavigator from './src/navigation/AppNavigator';
-import { HttpServer } from './src/ipc/http-server';
+import { httpServer } from './src/ipc/http-server';
 import { configureGoogleOAuth } from './src/platform/token-manager';
 
 // Read from app.json extra config or environment variable
 const GOOGLE_OAUTH_CLIENT_ID =
   Constants.expoConfig?.extra?.googleOAuthClientId ?? '';
-
-const httpServer = new HttpServer();
 
 export default function App() {
   const [serverError, setServerError] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 node_modules/
-android/
+/android/
 ios/
 .expo/
 dist/
 *.tsbuildinfo
+**/android/build/
