@@ -8,10 +8,9 @@ import type { AuthTokens } from '../lib/google-auth';
 import * as LocalDB from '../storage/local-db';
 
 // KEY DIFFERENCE FROM OAUTHUB VERSION:
-// - Has FULL read/write access to entire Drive (not just /Notability)
-// - Lists ALL files, not just files under /Notability
-// - Uploads go to Drive root (no folder scoping)
-// - App can see/modify ANY file on the user's Drive
+// - Uses Google OAuth directly (not mediated by OAuthHub runtime)
+// - Requests full Drive scope but self-restricts to /Notability folder
+// - The OAuthHub version enforces folder scoping via manifest pipeline
 
 function formatTime(iso: string): string {
   if (!iso) return '';
@@ -102,7 +101,7 @@ export default function HomeScreen() {
   };
 
   /**
-   * Upload selected file directly to Google Drive root (no folder restriction).
+   * Upload selected file to the /Notability folder on Google Drive.
    * Uses multipart upload: metadata + file content in a single request.
    */
   const handleBackup = async () => {
@@ -112,6 +111,31 @@ export default function HomeScreen() {
     try {
       const accessToken = await getToken();
 
+      // Find or create the Notability folder
+      const folderRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name = 'Notability' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents")}&fields=files(id)&pageSize=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (!folderRes.ok) throw new Error(`Drive API error (${folderRes.status})`);
+      const folderJson = await folderRes.json();
+      let notabilityFolderId = folderJson.files?.[0]?.id;
+      if (!notabilityFolderId) {
+        const createRes = await fetch(
+          'https://www.googleapis.com/drive/v3/files',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: 'Notability', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] }),
+          },
+        );
+        if (!createRes.ok) throw new Error(`Failed to create Notability folder (${createRes.status})`);
+        const createJson = await createRes.json();
+        notabilityFolderId = createJson.id;
+      }
+
       // Read file content as base64
       const contentBase64 = await FileSystem.readAsStringAsync(selectedFile.uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -120,8 +144,7 @@ export default function HomeScreen() {
       const metadata = {
         name: selectedFile.name,
         mimeType: selectedFile.mimeType || 'application/octet-stream',
-        // NOTE: No "parents" field — file goes to Drive root.
-        // The OAuthHub version scopes uploads to the /Notability folder.
+        parents: [notabilityFolderId],
       };
 
       const boundary = 'notability_baseline_boundary';
@@ -160,8 +183,7 @@ export default function HomeScreen() {
   };
 
   /**
-   * Fetch ALL files from Google Drive — not scoped to any folder.
-   * The OAuthHub version only returns files under /Notability.
+   * Fetch files from Google Drive scoped to the /Notability folder.
    */
   const handleFetchFiles = async () => {
     setIsFetching(true);
@@ -169,13 +191,27 @@ export default function HomeScreen() {
     try {
       const accessToken = await getToken();
 
-      const res = await fetch(
-        'https://www.googleapis.com/drive/v3/files?pageSize=50&fields=files(id,name,mimeType,modifiedTime,parents)&orderBy=modifiedTime desc',
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        },
+      // Find the Notability folder ID
+      const folderRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name = 'Notability' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents")}&fields=files(id)&pageSize=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
+      if (!folderRes.ok) {
+        const errBody = await folderRes.text();
+        throw new Error(`Drive API error (${folderRes.status}): ${errBody}`);
+      }
+      const folderJson = await folderRes.json();
+      const folderId = folderJson.files?.[0]?.id;
+      if (!folderId) {
+        await LocalDB.storeFiles([]);
+        setFiles([]);
+        return;
+      }
 
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${folderId}' in parents and trashed = false`)}&pageSize=50&fields=files(id,name,mimeType,modifiedTime,parents)&orderBy=modifiedTime%20desc`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
       if (!res.ok) {
         const errBody = await res.text();
         throw new Error(`Drive API error (${res.status}): ${errBody}`);
@@ -207,8 +243,8 @@ export default function HomeScreen() {
       <View style={styles.content}>
         <Text style={styles.mainTitle}>Drive Backup</Text>
         <Text style={styles.subtitle}>
-          Upload a file to Google Drive and browse ALL your Drive files.
-          This baseline app has full access to your entire Drive.
+          Upload a file to Google Drive and browse files in your /Notability folder.
+          This baseline app uses Google OAuth directly.
         </Text>
 
         {isAuthed ? (
@@ -257,7 +293,7 @@ export default function HomeScreen() {
                   <Text style={styles.buttonTextWhite}>Loading...</Text>
                 </View>
               ) : (
-                <Text style={styles.buttonTextWhite}>List All Drive Files</Text>
+                <Text style={styles.buttonTextWhite}>List Notability Files</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity onPress={handleDisconnect}>
@@ -278,7 +314,7 @@ export default function HomeScreen() {
 
         {files.length > 0 && (
           <View style={styles.fileListContainer}>
-            <Text style={styles.fileListTitle}>All Drive Files</Text>
+            <Text style={styles.fileListTitle}>Notability Files</Text>
             <FlatList
               data={files}
               keyExtractor={(item, i) => item.id ?? String(i)}

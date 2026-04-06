@@ -244,8 +244,18 @@ export default function DemoSuiteScreen() {
           return { flights };
         }
         case 'notability': {
+          // Find the Notability folder ID first
+          const folderRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name = 'Notability' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents")}&fields=files(id)&pageSize=1`,
+            { headers: { Authorization: `Bearer ${at}` } },
+          );
+          if (!folderRes.ok) throw new Error(`Drive API error (${folderRes.status})`);
+          const folderJson = await folderRes.json();
+          const folderId = folderJson.files?.[0]?.id;
+          if (!folderId) return { files: [] };
+
           const res = await fetch(
-            'https://www.googleapis.com/drive/v3/files?pageSize=50&fields=files(id,name,mimeType,modifiedTime,parents)&orderBy=modifiedTime%20desc',
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${folderId}' in parents and trashed = false`)}&pageSize=50&fields=files(id,name,mimeType,modifiedTime,parents)&orderBy=modifiedTime%20desc`,
             { headers: { Authorization: `Bearer ${at}` } },
           );
           if (!res.ok) throw new Error(`Drive API error (${res.status})`);
@@ -325,10 +335,36 @@ export default function DemoSuiteScreen() {
         );
         await DB.setGoogleTokens(selectedVersion, valid);
 
+        // Find or create the Notability folder
+        const folderSearchRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("name = 'Notability' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents")}&fields=files(id)&pageSize=1`,
+          { headers: { Authorization: `Bearer ${valid.accessToken}` } },
+        );
+        if (!folderSearchRes.ok) throw new Error(`Drive API error (${folderSearchRes.status})`);
+        const folderSearchJson = await folderSearchRes.json();
+        let notabilityFolderId = folderSearchJson.files?.[0]?.id;
+        if (!notabilityFolderId) {
+          const createRes = await fetch(
+            'https://www.googleapis.com/drive/v3/files',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${valid.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: 'Notability', mimeType: 'application/vnd.google-apps.folder', parents: ['root'] }),
+            },
+          );
+          if (!createRes.ok) throw new Error(`Failed to create Notability folder (${createRes.status})`);
+          const createJson = await createRes.json();
+          notabilityFolderId = createJson.id;
+        }
+
         const boundary = 'oauthhub_demo_boundary';
         const metadata = {
           name: viewState.selectedFile.name,
           mimeType: viewState.selectedFile.mimeType,
+          parents: [notabilityFolderId],
         };
         const body =
           `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
