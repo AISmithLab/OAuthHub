@@ -1,9 +1,12 @@
-// Import TokenManager only - GraphQL schemas removed to avoid DOM conflicts in service worker
 import TokenManager from '../platform/token-manager.js';
 import OAuthCrypto from './oauth-crypto.js';
+import { graphql } from 'graphql';
+import { calendarSchema, EventDetails } from './google-calendar-graphql.js';
+import { gmailSchema, MessageDetails, MessagePartDetails } from './gmail-graphql.js';
+import { driveSchema } from './google-drive-graphql.js';
 
-// Note: GraphQL schemas temporarily disabled in service worker context
-// Using mock data instead until proper service worker GraphQL solution is implemented
+// Known GraphQL fragments that manifests can reference via ...FragmentName
+const KNOWN_FRAGMENTS = { EventDetails, MessageDetails, MessagePartDetails };
 
 // SSRF protection: block requests to private/internal IP ranges
 function isAllowedUrl(urlString) {
@@ -260,47 +263,6 @@ function decodeBase64ToBytes(value) {
   return bytes;
 }
 
-function decodeBase64Url(value) {
-  if (!value) return '';
-
-  try {
-    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-    return decodeURIComponent(escape(atob(padded)));
-  } catch {
-    try {
-      const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-      return atob(padded);
-    } catch {
-      return '';
-    }
-  }
-}
-
-function extractGmailBody(payload) {
-  if (!payload) return '';
-
-  const parts = Array.isArray(payload.parts) ? payload.parts : [];
-
-  for (const part of parts) {
-    const mimeType = part?.mimeType || '';
-    if (mimeType.startsWith('text/plain') && part?.body?.data) {
-      return decodeBase64Url(part.body.data);
-    }
-  }
-
-  for (const part of parts) {
-    const nestedBody = extractGmailBody(part);
-    if (nestedBody) return nestedBody;
-  }
-
-  if (payload.body?.data) {
-    return decodeBase64Url(payload.body.data);
-  }
-
-  return '';
-}
 
 function isBinaryBody(value) {
   return (typeof Blob !== 'undefined' && value instanceof Blob) ||
@@ -336,134 +298,13 @@ class Runtime {
     this.interactive = opts.interactive !== undefined ? opts.interactive : true;
   }
 
-  // ─── API helpers per resource type ────────────────────────────
+  // ─── GraphQL schemas per resource type ────────────────────────
 
-  async _fetchGmail(query, token) {
-
-    const headers = { 'Authorization': `Bearer ${token}` };
-    const gmailUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages');
-    gmailUrl.searchParams.set('maxResults', '100');
-
-    const response = await fetch(gmailUrl.toString(), { headers });
-    if (!response.ok) {
-      throw new Error(`Gmail API error: ${response.status} ${await response.text()}`);
-    }
-
-    const messageList = await response.json();
-    const messagesToFetch = Array.isArray(messageList.messages) ? messageList.messages : [];
-
-    if (messagesToFetch.length === 0) {
-      return { messages: [] };
-    }
-
-    const detailedMessages = [];
-
-    for (const msg of messagesToFetch) {
-      try {
-        const r = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-          { headers }
-        );
-        if (r.ok) {
-          const d = await r.json();
-          const hdrs = d.payload?.headers || [];
-          detailedMessages.push({
-            id: d.id,
-            threadId: d.threadId,
-            labelIds: d.labelIds || [],
-            snippet: d.snippet || '',
-            body: extractGmailBody(d.payload),
-            historyId: d.historyId,
-            internalDate: d.internalDate,
-            payload: {
-              headers: [
-                { name: 'Subject', value: hdrs.find(h => h.name.toLowerCase() === 'subject')?.value || '' },
-                { name: 'From',    value: hdrs.find(h => h.name.toLowerCase() === 'from')?.value || '' }
-              ]
-            }
-          });
-        }
-      } catch (e) {
-        console.warn(`Failed to fetch message ${msg.id}:`, e.message);
-      }
-    }
-    return { messages: detailedMessages };
-  }
-
-  async _fetchCalendar(query, token) {
-
-    const now = new Date().toISOString();
-    const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=50&timeMin=${encodeURIComponent(now)}&singleEvents=true&orderBy=startTime`;
-    const response = await fetch(calUrl, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) {
-      throw new Error(`Calendar API error: ${response.status} ${await response.text()}`);
-    }
-
-    const data = await response.json();
-    const events = (data.items || []).map(ev => ({
-      id: ev.id,
-      summary: ev.summary || '',
-      description: ev.description || '',
-      start: ev.start || {},
-      end: ev.end || {},
-      attendees: (ev.attendees || []).map(a => ({
-        email: a.email,
-        displayName: a.displayName || '',
-        responseStatus: a.responseStatus || ''
-      })),
-      location: ev.location || '',
-      status: ev.status || '',
-      htmlLink: ev.htmlLink || ''
-    }));
-    return { events };
-  }
-
-  async _fetchDrive(query, token) {
-
-    const driveUrl = 'https://www.googleapis.com/drive/v3/files?pageSize=50&fields=files(id,name,mimeType,modifiedTime,size,webViewLink,parents)&q=trashed%20%3D%20false';
-    const response = await fetch(driveUrl, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) {
-      throw new Error(`Drive API error: ${response.status} ${await response.text()}`);
-    }
-
-    const data = await response.json();
-    const files = Array.isArray(data.files) ? data.files : [];
-    const parentNames = await this._resolveDriveParentNames(files, token);
-
-    return {
-      files: files.map(file => ({
-        ...file,
-        parents: Array.isArray(file.parents)
-          ? file.parents.map(parentId => parentNames[parentId] || parentId)
-          : []
-      }))
-    };
-  }
-
-  async _fetchForms(query, token) {
-
-    // Forms API requires a form ID; extract from query if present
-    const formIdMatch = query.match(/formId:\s*"([^"]+)"/);
-    if (!formIdMatch) {
-      throw new Error('Forms query must include formId, e.g. formId: "abc123"');
-    }
-    const formId = formIdMatch[1];
-
-    const formsUrl = `https://forms.googleapis.com/v1/forms/${formId}/responses`;
-    const response = await fetch(formsUrl, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) {
-      throw new Error(`Forms API error: ${response.status} ${await response.text()}`);
-    }
-
-    const data = await response.json();
-    return { responses: data.responses || [] };
-  }
+  static SCHEMAS = {
+    gmail: gmailSchema,
+    google_calendar: calendarSchema,
+    google_drive: driveSchema,
+  };
 
   async receive(name, source, request) {
     if (!source || source === 'inline') {
@@ -529,144 +370,40 @@ class Runtime {
     return await response.text();
   }
 
-  // ─── GraphQL field projection helper ─────────────────────────
-
-  /**
-   * Parse a GraphQL-style query string and extract requested field names.
-   * Supports simple queries like: { events { summary start end attendees } }
-   * Returns an array of field names, or null if no valid query.
-   */
-  static parseFieldsFromQuery(query) {
-    if (!query || typeof query !== 'string') return null;
-
-    // Strip outer braces and type name to get field list
-    // e.g. "{ events { summary start end } }" -> "summary start end"
-    const cleaned = query.replace(/[{}]/g, ' ').trim();
-    const tokens = cleaned.split(/\s+/).filter(Boolean);
-
-    // Filter out type names (first token is usually the resource type)
-    // Keep only lowercase field-looking names
-    const fields = tokens.filter(t => /^[a-z_][a-zA-Z0-9_.]*$/.test(t));
-    return fields.length > 0 ? fields : null;
-  }
-
-  /**
-   * Project (filter) fields from data objects based on requested fields.
-   * Only keeps the specified fields in each item.
-   */
-  static projectFields(data, fields) {
-    if (!fields || !Array.isArray(fields) || fields.length === 0) return data;
-    if (!Array.isArray(data)) return data;
-
-    return data.map(item => {
-      const projected = {};
-      for (const field of fields) {
-        const value = field.split('.').reduce((acc, k) => acc && acc[k], item);
-        if (value !== undefined) {
-          projected[field.includes('.') ? field.split('.').pop() : field] = value;
-        }
-      }
-      return projected;
-    });
-  }
-
-  /**
-   * Build Google API `fields` parameter from requested field names.
-   * Maps GraphQL-style fields to Google API fields format.
-   */
-  static buildGoogleApiFields(resourceType, requestedFields) {
-    if (!requestedFields) return null;
-
-    const fieldMappings = {
-      google_calendar: {
-        wrapper: 'items',
-        fields: { id: 'id', summary: 'summary', description: 'description', start: 'start', end: 'end', attendees: 'attendees', location: 'location', status: 'status', htmlLink: 'htmlLink' }
-      },
-      gmail: {
-        wrapper: 'messages',
-        fields: { id: 'id', threadId: 'threadId', snippet: 'snippet', body: 'body', labelIds: 'labelIds', payload: 'payload' }
-      },
-      google_drive: {
-        wrapper: 'files',
-        fields: { id: 'id', name: 'name', mimeType: 'mimeType', modifiedTime: 'modifiedTime', size: 'size', webViewLink: 'webViewLink', parents: 'parents' }
-      }
-    };
-
-    const mapping = fieldMappings[resourceType];
-    if (!mapping) return null;
-
-    const apiFields = requestedFields
-      .map(f => mapping.fields[f])
-      .filter(Boolean);
-
-    return apiFields.length > 0 ? `${mapping.wrapper}(${apiFields.join(',')})` : null;
-  }
-
-  // ─── pull: dispatch to the correct API handler ────────────────
+  // ──�� pull: execute GraphQL query against the appropriate schema ──
 
   async pull(name, resourceType, query, manifest) {
-    const supported = ['gmail', 'google_calendar', 'google_forms', 'google_drive'];
-    if (!supported.includes(resourceType)) {
-      throw new Error(`Operator ${name}: resourceType ${resourceType} not supported.`);
+    const schema = Runtime.SCHEMAS[resourceType];
+    if (!schema) {
+      throw new Error(`Operator ${name}: resourceType "${resourceType}" not supported. Valid types: ${Object.keys(Runtime.SCHEMAS).join(', ')}`);
     }
 
-    // Get valid Google token via chrome.identity
+    // Get valid Google token
     const scopes = this.tokenManager.inferScopes(manifest);
     const tokenData = await this.tokenManager.getValidGoogleToken(scopes, null, 'GET', { interactive: this.interactive });
     const accessToken = tokenData.access_token || tokenData;
 
-    // Parse GraphQL-style query for field projection
-    const requestedFields = Runtime.parseFieldsFromQuery(query);
-
-    let result;
-    switch (resourceType) {
-      case 'gmail':            result = await this._fetchGmail(query, accessToken); break;
-      case 'google_calendar':  result = await this._fetchCalendar(query, accessToken); break;
-      case 'google_drive':     result = await this._fetchDrive(query, accessToken); break;
-      case 'google_forms':     result = await this._fetchForms(query, accessToken); break;
-      default:
-        throw new Error(`Operator ${name}: no handler for ${resourceType}`);
-    }
-
-    // Apply client-side field projection if query specified fields
-    if (requestedFields) {
-      const dataKey = Object.keys(result)[0];
-      if (dataKey && Array.isArray(result[dataKey])) {
-        result[dataKey] = Runtime.projectFields(result[dataKey], requestedFields);
+    // Append any referenced fragment definitions to the query
+    let source = query;
+    for (const [fragName, definition] of Object.entries(KNOWN_FRAGMENTS)) {
+      if (source.includes(`...${fragName}`) && !source.includes(`fragment ${fragName}`)) {
+        source = source + '\n' + definition;
       }
     }
 
-    return result;
-  }
+    // Execute real GraphQL query against the schema
+    const gqlResult = await graphql({
+      schema,
+      source,
+      contextValue: { accessToken }
+    });
 
-  async _resolveDriveParentNames(files, token) {
-    const parentIds = [...new Set(
-      files.flatMap(file => Array.isArray(file.parents) ? file.parents : [])
-    )];
-
-    if (parentIds.length === 0) {
-      return {};
+    if (gqlResult.errors && gqlResult.errors.length > 0) {
+      const messages = gqlResult.errors.map(e => e.message).join('; ');
+      throw new Error(`Operator ${name}: GraphQL errors: ${messages}`);
     }
 
-    const entries = await Promise.all(parentIds.map(async (parentId) => {
-      try {
-        const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(parentId)}?fields=id,name`,
-          { headers: { 'Authorization': `Bearer ${token}` } }
-        );
-
-        if (!response.ok) {
-          return [parentId, parentId];
-        }
-
-        const data = await response.json();
-        return [parentId, data.name || parentId];
-      } catch {
-        return [parentId, parentId];
-      }
-    }));
-
-    return Object.fromEntries(entries);
+    return gqlResult.data;
   }
 
   _matchesFilterOperation(value, operation, target) {
