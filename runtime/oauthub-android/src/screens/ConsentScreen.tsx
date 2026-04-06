@@ -227,6 +227,14 @@ export default function ConsentScreen() {
 
   const appName = getClientName(redirectUri, parsedManifest.title);
 
+  // Reset state when new authorization params arrive (e.g. second app auth)
+  useEffect(() => {
+    setIsAuthorized(false);
+    setError('');
+    setPreviewData(null);
+    setActiveTab('Overview');
+  }, [manifest, redirectUri, state]);
+
   useEffect(() => {
     if (!manifest || !hasManifest) return;
     setPreviewLoading(true);

@@ -266,7 +266,18 @@ class TokenManager {
   async _doGoogleSignIn(scopes) {
     this._configureGoogleSignIn(scopes);
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    await GoogleSignin.signIn();
+
+    const currentUser = GoogleSignin.getCurrentUser();
+    if (currentUser) {
+      // Already signed in — request additional scopes incrementally
+      const apiScopes = scopes.filter(
+        s => s !== 'openid' && s !== 'email' && s !== 'profile'
+      );
+      await GoogleSignin.addScopes({ scopes: apiScopes });
+    } else {
+      await GoogleSignin.signIn();
+    }
+
     const tokens = await GoogleSignin.getTokens();
     return {
       accessToken: tokens.accessToken,
