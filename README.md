@@ -15,7 +15,7 @@ Most OAuth apps request more data access than they need. For example, Uber only 
 #### Zoom accesses Google Calendar to get all upcoming Zoom meetings
 ```js
 PIPELINE: CalendarEvents -> SelectEvents -> FilterTime -> FilterZoom -> PostToZoom
-CalendarEvents(type: "Pull", resourceType: "google_calendar", query: "{ events(calendarId) {...} }")
+CalendarEvents(type: "Pull", resourceType: "google_calendar", query: "{ events {...} }")
 SelectEvents(type: "Select", field: "events")
 FilterTime(type: "Filter", operation: ">", field: "start.dateTime", targetValue: NOW)
 FilterZoom(type: "Filter", operation: "match", field: ["location", "description"], pattern: "Zoom URL", requirement: "any")

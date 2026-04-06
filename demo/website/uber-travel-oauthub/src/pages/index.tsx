@@ -9,7 +9,7 @@ function buildOAuthHubManifest(origin: string): string {
     "DESCRIPTION: Get only flight-related email snippets",
     "PIPELINE: PullGmail->SelectMessages->FilterFlights->SendToUber",
     "",
-    'PullGmail(type: "Pull", resourceType: "gmail", query: "{ messages(userId) { snippet } }")',
+    'PullGmail(type: "Pull", resourceType: "gmail", query: "{ messages { snippet } }")',
     'SelectMessages(type: "Select", field: "messages")',
     'FilterFlights(type: "Filter", operation: "include", field: "snippet", targetValue: "flight")',
     `SendToUber(type: "Post", destination: "${origin}/api/oauthub/data")`,

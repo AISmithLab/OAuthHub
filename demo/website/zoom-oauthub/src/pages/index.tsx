@@ -10,7 +10,7 @@ function buildOAuthHubManifest(origin: string): string {
     "DESCRIPTION: Get all upcoming Zoom meetings",
     "PIPELINE: PullCalendarEvents->SelectEvents->FilterTime->FilterZoom->PostToBackend",
     "",
-    'PullCalendarEvents(type: "Pull", resourceType: "google_calendar", query: "{ events(calendarId) {...EventDetails} }")',
+    'PullCalendarEvents(type: "Pull", resourceType: "google_calendar", query: "{ events {...EventDetails} }")',
     'SelectEvents(type: "Select", field: "events")',
     'FilterTime(type: "Filter", operation: ">", field: "start.dateTime", targetValue: NOW)',
     'FilterZoom(type: "Filter", operation: "match", field: ["location", "description"], pattern: "zoom\\.us", requirement: "any")',
