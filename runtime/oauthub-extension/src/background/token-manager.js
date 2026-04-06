@@ -649,7 +649,10 @@ class TokenManager {
 
     // Validate state against the stored session state
     const storedState = await this.getTokensEphemeral(`oauth_state_${sessionId}`);
-    if (storedState && storedState !== state) {
+    if (!storedState) {
+      throw new Error('No stored state found — session expired or possible CSRF attack');
+    }
+    if (storedState !== state) {
       throw new Error('State mismatch — possible CSRF attack');
     }
 

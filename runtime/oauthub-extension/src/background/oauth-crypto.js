@@ -73,7 +73,7 @@ class OAuthCrypto {
    */
   async verifyPKCE(verifier, challenge) {
     const computedChallenge = await this.generateCodeChallenge(verifier);
-    return computedChallenge === challenge;
+    return this._constantTimeEqual(computedChallenge, challenge);
   }
 
   /**
@@ -173,7 +173,11 @@ class OAuthCrypto {
    * @returns {string} Base64URL encoded string
    */
   base64URLEncode(bytes) {
-    const base64 = btoa(String.fromCharCode.apply(null, bytes));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
@@ -183,8 +187,8 @@ class OAuthCrypto {
    * @returns {Uint8Array} Decoded bytes
    */
   base64URLDecode(str) {
-    // Add padding if necessary
-    str += '==='.slice(0, 4 - (str.length % 4));
+    // Add correct padding: (4 - len%4) % 4 gives 0 when already aligned
+    str += '='.repeat((4 - (str.length % 4)) % 4);
     // Convert to regular base64
     const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
     // Decode
@@ -225,7 +229,19 @@ class OAuthCrypto {
     if (!receivedState || !storedState) {
       return false;
     }
-    return receivedState === storedState;
+    return this._constantTimeEqual(receivedState, storedState);
+  }
+
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   */
+  _constantTimeEqual(a, b) {
+    if (a.length !== b.length) return false;
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
   }
 
   /**
