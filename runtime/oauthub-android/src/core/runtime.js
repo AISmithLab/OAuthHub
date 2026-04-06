@@ -332,6 +332,12 @@ class Runtime {
     } = requestConfig;
 
     const url = new URL(source);
+
+    // SSRF protection: block loopback and private-network targets
+    if (!isAllowedUrl(url.toString())) {
+      throw new Error(`Operator ${name}: source URL blocked by SSRF policy.`);
+    }
+
     if (query && typeof query === 'object' && !Array.isArray(query)) {
       for (const [key, value] of Object.entries(query)) {
         if (value == null) continue;
