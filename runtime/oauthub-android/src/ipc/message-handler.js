@@ -5,11 +5,13 @@
 import Runtime from '../core/runtime';
 import OAuthCrypto from '../core/oauth-crypto';
 import TokenManager from '../platform/token-manager';
+import Scheduler from '../platform/scheduler';
 import { storage } from '../platform/storage';
 import { parseManifest } from '../core/manifest-parser';
 
 const oauthCrypto = new OAuthCrypto();
 const tokenManager = new TokenManager();
+const scheduler = new Scheduler();
 const sessionKeyPairs = new Map();
 const pendingAuthCodeExchanges = new Set();
 
@@ -461,6 +463,49 @@ export class MessageHandler {
 
       await storage.addLog('authorize', 'Authorization granted', {});
 
+      // Wire scheduled_time: register a background task that periodically executes the manifest
+      if (accessType === 'scheduled_time') {
+        try {
+          const periodInMinutes = this._parseSchedulePeriod(schedule);
+          const taskName = `scheduled_${authCode}_${Date.now()}`;
+
+          await scheduler.createTask({
+            name: taskName,
+            periodInMinutes,
+            startTime: null,
+            endTime: null,
+            callback: async () => {
+              try {
+                console.log(`[Scheduler] Executing manifest for ${taskName}`);
+                const runtime = new Runtime();
+                const result = await runtime.executeManifest(manifest);
+                if (result && redirectUri) {
+                  await fetch(redirectUri, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${authCode}`,
+                      'X-OAuthHub-Type': 'scheduled_data',
+                    },
+                    body: JSON.stringify({
+                      type: 'scheduled_data',
+                      data: result,
+                      timestamp: new Date().toISOString(),
+                      taskName,
+                    }),
+                  }).catch(err => console.error(`[Scheduler] Failed to send data: ${err.message}`));
+                }
+              } catch (err) {
+                console.error(`[Scheduler] Task ${taskName} failed:`, err.message);
+              }
+            },
+          });
+          console.log(`[Scheduler] Created task ${taskName}, period: ${periodInMinutes}min`);
+        } catch (schedErr) {
+          console.warn('[Scheduler] Failed to create scheduled task:', schedErr.message);
+        }
+      }
+
       return {
         success: true,
         authCode,
@@ -471,6 +516,31 @@ export class MessageHandler {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  }
+
+  // Parse schedule string (e.g. "interval:5min") into period in minutes
+  _parseSchedulePeriod(schedule) {
+    if (!schedule || typeof schedule !== 'string') return 15; // default
+    const parts = schedule.split(';')[0]; // take first spec
+    const colonIdx = parts.indexOf(':');
+    if (colonIdx === -1) return 15;
+    const type = parts.substring(0, colonIdx).trim();
+    const value = parts.substring(colonIdx + 1).trim();
+
+    if (type === 'interval') {
+      const match = value.match(/^(\d+)(sec|min|hour)$/);
+      if (match) {
+        const [, amount, unit] = match;
+        switch (unit) {
+          case 'sec': return Math.max(1, Math.ceil(parseInt(amount) / 60));
+          case 'min': return Math.max(1, parseInt(amount));
+          case 'hour': return parseInt(amount) * 60;
+        }
+      }
+    } else if (type === 'daily') {
+      return 24 * 60;
+    }
+    return 15;
   }
 
   // ===== REVOKE MANIFEST (cascade delete) =====
