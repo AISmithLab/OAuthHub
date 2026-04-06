@@ -102,6 +102,15 @@ npm run dev
 
 The Android runtime and demo apps are not deployed — they must be built locally. Both require a Google OAuth client ID. Use the **web client ID (not the Android one)** provided via HotCRP — the same `GOOGLE_CLIENT_ID` used for the website demo.
 
+**Set up an Android emulator (if no physical device):**
+
+1. Open Android Studio → Tools → Device Manager
+2. Click **Create Virtual Device**
+3. Select a device (e.g., Pixel 6) and click **Next**
+4. Select a system image with **API 34** (Android 14) — download it if needed — and click **Next**
+5. Under **Show Advanced Settings**, set **Internal Storage** to at least **4096 MB** (the default 2 GB may be too small for the apps)
+6. Click **Finish**, then start the emulator by clicking the play button
+
 **Build the runtime:**
 ```bash
 cd runtime/oauthub-android
