@@ -232,7 +232,9 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
           googleTokens: authData.googleTokens,
           signingKeyPair: authData.signingKeyPair,
           // Preserve PKCE challenge — verified on every query as well
-          pkce_challenge: authData.pkce_challenge
+          pkce_challenge: authData.pkce_challenge,
+          // Mark as exchanged so reserveAccessToken rejects raw auth codes
+          exchanged: true
         };
 
         // Migrate in-memory signing key pair to new token key

@@ -217,6 +217,13 @@ export const reserveAccessToken = async (token) => {
         return;
       }
 
+      // Reject raw auth codes that were never exchanged via PKCE
+      if (!authData.exchanged) {
+        reservationError = new Error('Token has not been exchanged — use EXCHANGE_AUTH_CODE first');
+        tx.abort();
+        return;
+      }
+
       if (new Date(authData.expiresAt).getTime() <= now) {
         reservationError = new Error('Access token has expired');
         tx.abort();
