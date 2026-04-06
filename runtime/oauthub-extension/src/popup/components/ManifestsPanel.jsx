@@ -356,6 +356,7 @@ const ManifestsPanel = () => {
         <div className="flex items-center gap-3 mb-5">
           <button
             onClick={() => navigate('/')}
+            aria-label="Go back"
             className="p-2 hover:bg-white rounded-xl border border-transparent hover:border-gray-200 hover:shadow-sm transition-all duration-200"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />

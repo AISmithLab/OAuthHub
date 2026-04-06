@@ -461,12 +461,23 @@ class TokenManager {
   }
 
   async refreshGoogleToken(refreshToken) {
-    const config = { ...this.googleAuthConfig };
     try {
-      const result = await refresh(config, { refreshToken });
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: this.googleAuthConfig.clientId,
+        }).toString(),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      }
+      const result = await response.json();
       const tokenData = {
-        access_token: result.accessToken,
-        refresh_token: result.refreshToken || refreshToken,
+        access_token: result.access_token,
+        refresh_token: result.refresh_token || refreshToken,
         token_type: 'Bearer',
       };
       const existing = await this.getTokens('google');

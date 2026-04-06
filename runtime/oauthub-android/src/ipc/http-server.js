@@ -20,9 +20,7 @@ function generateSecret() {
   } else if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.getRandomValues) {
     globalThis.crypto.getRandomValues(array);
   } else {
-    for (let i = 0; i < array.length; i++) {
-      array[i] = Math.floor(Math.random() * 256);
-    }
+    throw new Error('crypto.getRandomValues is required for secure secret generation');
   }
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }

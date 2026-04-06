@@ -41,6 +41,9 @@ const Dashboard = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
+            role="switch"
+            aria-checked={settings.enabled}
+            aria-label="Enable or disable OAuthHub"
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
               settings.enabled ? 'bg-blue-600' : 'bg-gray-300'
             }`}

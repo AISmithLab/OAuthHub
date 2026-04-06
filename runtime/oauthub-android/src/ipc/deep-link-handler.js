@@ -51,8 +51,13 @@ function handleDeepLink(url, navigationRef, attempts = 0) {
         try {
           const rUrl = new URL(params.redirect_uri);
           const scheme = rUrl.protocol.toLowerCase();
-          if (['javascript:', 'data:', 'blob:', 'vbscript:'].includes(scheme)) {
+          if (['javascript:', 'data:', 'blob:', 'file:', 'vbscript:'].includes(scheme)) {
             console.warn('Deep link: blocked dangerous redirect_uri scheme');
+            return;
+          }
+          // Require HTTPS for non-localhost HTTP URIs
+          if (scheme === 'http:' && rUrl.hostname !== 'localhost' && rUrl.hostname !== '127.0.0.1') {
+            console.warn('Deep link: blocked non-localhost http redirect_uri — use https');
             return;
           }
         } catch {

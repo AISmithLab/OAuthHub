@@ -178,6 +178,7 @@ export default function ManifestEditor({
         {/* Transparent textarea */}
         <textarea
           ref={textareaRef}
+          aria-label="Manifest editor"
           className="absolute inset-0 w-full h-full py-2 px-2 bg-transparent text-transparent caret-gray-800 resize-none outline-none overflow-auto"
           style={{ lineHeight: '20px', tabSize: 2, caretColor: '#1f2937', fontFamily: codingFont }}
           value={value}

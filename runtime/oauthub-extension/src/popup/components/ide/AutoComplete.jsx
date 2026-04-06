@@ -56,12 +56,16 @@ export default function AutoComplete({ context, definedOperators, position, onSe
   return (
     <div
       ref={listRef}
+      role="listbox"
+      aria-label="Autocomplete suggestions"
       className="absolute z-50 bg-white border border-gray-300 rounded shadow-lg max-h-40 overflow-y-auto text-xs"
       style={{ top: position.top, left: position.left, minWidth: 140 }}
     >
       {suggestions.map((item, i) => (
         <div
           key={item}
+          role="option"
+          aria-selected={i === selectedIndex}
           className={`px-3 py-1 cursor-pointer ${i === selectedIndex ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}
           onMouseDown={(e) => { e.preventDefault(); onSelect(item); }}
           onMouseEnter={() => setSelectedIndex(i)}

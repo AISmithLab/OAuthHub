@@ -22,24 +22,28 @@ const QueryType = new GraphQLObjectType({
       args: {
         formId: { type: GraphQLString }
       },
-      resolve: async (_, { formId }) => {
-        try {
-          const response = await fetch('./data.json');
-          const data = await response.json();
-          const responses = data.google_forms?.responses || [];
-
-          return responses.map(response => ({
-            responseId: response.responseId || '',
-            createTime: response.createTime || '',
-            lastSubmittedTime: response.lastSubmittedTime || '',
-            respondentEmail: response.respondentEmail || '',
-            answers: JSON.stringify(response.answers || []),
-            totalScore: response.totalScore || 0
-          }));
-        } catch (error) {
-          console.error('Error fetching form responses:', error);
-          return [];
+      resolve: async (_, { formId }, context) => {
+        if (!formId) {
+          throw new Error('formId argument is required');
         }
+        if (!context.accessToken) throw new Error('Missing access token');
+        const token = context.accessToken;
+        const url = `https://forms.googleapis.com/v1/forms/${encodeURIComponent(formId)}/responses`;
+
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          console.error(`Forms API error: ${response.status}`, body);
+          throw new Error(`Forms API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return (data.responses || []).map(r => ({
+          ...r,
+          answers: r.answers ? JSON.stringify(r.answers) : null
+        }));
       }
     }
   }

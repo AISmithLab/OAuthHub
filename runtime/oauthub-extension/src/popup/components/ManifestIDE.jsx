@@ -352,6 +352,7 @@ export default function ManifestIDE() {
             onClick={handleClose}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             title="Close IDE"
+            aria-label="Close IDE"
           >
             <ArrowLeft className="w-4 h-4 text-gray-500" />
           </button>

@@ -48,11 +48,14 @@ function isValidRedirectUri(uri) {
     // Allow https, custom app schemes, and localhost http
     if (scheme === 'https:') return true;
     if (scheme === 'http:') {
+      // Only allow HTTP for localhost development
       const host = url.hostname;
       return host === 'localhost' || host === '127.0.0.1';
     }
     // Allow custom app schemes (e.g. com.myapp://, myapp://)
-    return true;
+    // but require they have a host/path component (not just "scheme:")
+    if (url.host || url.pathname) return true;
+    return false;
   } catch { return false; }
 }
 

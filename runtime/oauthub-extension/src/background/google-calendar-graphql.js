@@ -286,77 +286,23 @@ const QueryType = new GraphQLObjectType({
       args: {
         calendarId: { type: GraphQLString }
       },
-      resolve: async (_, { calendarId }) => {
-        try {
-          const response = await fetch('./data.json');
-          const data = await response.json();
-          const events = data.google_calendar?.items || [];
-          
-          return events.map(event => ({
-            kind: event.kind || '',
-            etag: event.etag || '',
-            id: event.id || '',
-            status: event.status || '',
-            htmlLink: event.htmlLink || '',
-            created: event.created || '',
-            updated: event.updated || '',
-            summary: event.summary || '',
-            description: event.description || '',
-            location: event.location || '',
-            colorId: event.colorId || '',
-            creator: jsonToEventHelper.creator(event.creator || {}),
-            organizer: jsonToEventHelper.creator(event.organizer || {}),
-            start: jsonToEventHelper.dateTime(event.start || {}),
-            end: jsonToEventHelper.dateTime(event.end || {}),
-            endTimeUnspecified: event.endTimeUnspecified || false,
-            recurrence: event.recurrence || [],
-            recurringEventId: event.recurringEventId || '',
-            originalStartTime: jsonToEventHelper.dateTime(event.originalStartTime || {}),
-            transparency: event.transparency || '',
-            visibility: event.visibility || '',
-            iCalUID: event.iCalUID || '',
-            sequence: event.sequence || 0,
-            attendees: (event.attendees || []).map(attendee => ({
-              id: attendee.id || '',
-              email: attendee.email || '',
-              displayName: attendee.displayName || '',
-              organizer: attendee.organizer || false,
-              self: attendee.self || false,
-              resource: attendee.resource || false,
-              optional: attendee.optional || false,
-              responseStatus: attendee.responseStatus || '',
-              comment: attendee.comment || '',
-              additionalGuests: attendee.additionalGuests || 0
-            })),
-            attendeesOmitted: event.attendeesOmitted || false,
-            extendedProperties: event.extendedProperties || {},
-            hangoutLink: event.hangoutLink || '',
-            conferenceData: event.conferenceData || {},
-            gadget: event.gadget || {},
-            anyoneCanAddSelf: event.anyoneCanAddSelf || false,
-            guestsCanInviteOthers: event.guestsCanInviteOthers || false,
-            guestsCanModify: event.guestsCanModify || false,
-            guestsCanSeeOtherGuests: event.guestsCanSeeOtherGuests || false,
-            privateCopy: event.privateCopy || false,
-            locked: event.locked || false,
-            reminders: event.reminders || {},
-            source: event.source || {},
-            workingLocationProperties: event.workingLocationProperties || {},
-            outOfOfficeProperties: event.outOfOfficeProperties || {},
-            focusTimeProperties: event.focusTimeProperties || {},
-            attachments: (event.attachments || []).map(attachment => ({
-              fileUrl: attachment.fileUrl || '',
-              title: attachment.title || '',
-              mimeType: attachment.mimeType || '',
-              iconLink: attachment.iconLink || '',
-              fileId: attachment.fileId || ''
-            })),
-            eventType: event.eventType || ''
-          }));
-        } catch (error) {
-          console.error('Error fetching calendar events:', error);
-          return [];
+      resolve: async (_, { calendarId }, context) => {
+        if (!context.accessToken) throw new Error('Missing access token');
+        const token = context.accessToken;
+        const now = new Date().toISOString();
+        const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events?maxResults=50&timeMin=${encodeURIComponent(now)}&singleEvents=true&orderBy=startTime`;
+
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          const body = await response.text();
+          console.error(`Calendar API error: ${response.status}`, body);
+          throw new Error(`Calendar API error: ${response.status}`);
         }
+
+        const data = await response.json();
+        return data.items || [];
       }
     }
   }
