@@ -49,7 +49,7 @@ Upload(type: "Write", action: "create", resourceType: "google_drive")
 
 #### Android
 1. Run ``npm install`` in ``runtime/oauthub-android``.
-2. Run ``npx expo prebuild`` to generate the native project.
+2. Run ``npx expo prebuild --platform android`` to generate the native project.
 3. Run ``npx expo run:android`` to build and launch on a connected device or emulator.
 
 ### Developer Documentation

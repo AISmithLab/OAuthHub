@@ -15,7 +15,7 @@ The OAuthHub runtime for Android devices, built with React Native. Runs as a bac
 
 ```bash
 npm install
-npx expo prebuild
+npx expo prebuild --platform android
 npx expo run:android
 ```
 
