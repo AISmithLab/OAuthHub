@@ -111,6 +111,8 @@ The Android runtime and demo apps are not deployed — they must be built locall
 5. Under **Show Advanced Settings**, set **Internal Storage** to at least **4096 MB** (the default 2 GB may be too small for the apps)
 6. Click **Finish**, then start the emulator by clicking the play button
 
+**Note:** Ensure ports 8081 and 8082 are available on the host machine, as they are used by the Metro bundler for the runtime and demo app respectively.
+
 **Build the runtime:**
 ```bash
 cd runtime/oauthub-android
@@ -118,7 +120,6 @@ cp .env.example .env
 # Edit .env and fill in:
 #   GOOGLE_OAUTH_CLIENT_ID=<use the web CLIENT_ID provided via HotCRP>
 npm install
-npx expo prebuild --platform android
 npx expo run:android
 ```
 
@@ -129,11 +130,10 @@ cp .env.example .env
 # Edit .env and fill in:
 #   GOOGLE_OAUTH_CLIENT_ID=<use the web CLIENT_ID provided via HotCRP>
 npm install
-npx expo prebuild --platform android
-npx expo run:android
+npm run android
 ```
 
-The runtime must be running on the device before launching the demo app.
+The runtime must be running on the device before launching the demo app. If you briefly see an "App entry not found" screen, wait a few seconds for the Metro bundler to finish — the app will reload automatically.
 
 ### Testing the Environment
 

@@ -16,7 +16,7 @@ Each scenario has a **baseline** app (direct OAuth) and an **OAuthHub** variant 
 ```bash
 cd <demo-folder>
 npm install
-npx expo run:android
+npm run android
 ```
 
 Requires the OAuthHub Android runtime (`runtime/oauthub-android`) to be running on the same device for `-oauthub` variants.
