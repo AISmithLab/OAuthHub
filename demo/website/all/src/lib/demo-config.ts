@@ -223,7 +223,7 @@ export const versionConfigs: Record<VersionId, VersionConfig> = {
         'WriteToDrive(type: "Write", action: "create", resourceType: "google_drive")',
         'PullDriveFiles(type: "Pull", resourceType: "google_drive", query: "{ files { id name mimeType modifiedTime parents } }")',
         'SelectFiles(type: "Select", field: "files")',
-        'FilterNotabilityFolder(type: "Filter", operation: "include", field: "parents", targetValue: "Notability")',
+        'FilterNotabilityFolder(type: "Filter", operation: "==", field: "parents", targetValue: "Notability")',
         `PostToBackend(type: "Post", destination: "${origin}/api/oauthub/data?version=${version}")`,
       ].join("\n"),
   },
