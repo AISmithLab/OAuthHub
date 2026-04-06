@@ -17,7 +17,6 @@ import * as LocalDB from '../storage/local-db';
 
 interface EmailItem {
   subject: string;
-  from: string;
   snippet: string;
 }
 
@@ -26,7 +25,7 @@ interface EmailItem {
  *
  * KEY DIFFERENCE FROM OAUTHUB VERSION:
  * - Fetches ALL emails, not just flight-related ones
- * - Shows subject, from, and full snippet for every email
+ * - Shows subject and snippet for every email
  * - Demonstrates over-fetching — the app sees ALL email metadata
  *   even though it only needs flight info
  */
@@ -57,10 +56,9 @@ async function fetchEmails(accessToken: string): Promise<EmailItem[]> {
 
     const headers: { name: string; value: string }[] = msgData.payload?.headers ?? [];
     const subject = headers.find((h) => h.name === 'Subject')?.value ?? '(no subject)';
-    const from = headers.find((h) => h.name === 'From')?.value ?? '(unknown sender)';
     const snippet: string = msgData.snippet ?? '';
 
-    emails.push({ subject, from, snippet });
+    emails.push({ subject, snippet });
   }
 
   return emails;
@@ -209,9 +207,6 @@ export default function HomeScreen() {
             <Text style={styles.emailSubject} numberOfLines={1}>
               {item.subject}
             </Text>
-            <Text style={styles.emailFrom} numberOfLines={1}>
-              {item.from}
-            </Text>
             <Text style={styles.emailSnippet} numberOfLines={2}>
               {item.snippet}
             </Text>
@@ -346,11 +341,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#111827', // gray-900
-    marginBottom: 4,
-  },
-  emailFrom: {
-    fontSize: 12,
-    color: '#9ca3af', // gray-400
     marginBottom: 4,
   },
   emailSnippet: {
