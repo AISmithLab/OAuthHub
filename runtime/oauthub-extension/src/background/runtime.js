@@ -1,10 +1,13 @@
 import TokenManager from './token-manager.js';
 import OAuthCrypto from './oauth-crypto.js';
 import { graphql } from 'graphql';
-import { gmailSchema } from './gmail-graphql.js';
-import { calendarSchema } from './google-calendar-graphql.js';
+import { gmailSchema, MessageDetails, MessagePartDetails } from './gmail-graphql.js';
+import { calendarSchema, EventDetails } from './google-calendar-graphql.js';
 import { formsSchema } from './google-forms-graphql.js';
 import { driveSchema } from './google-drive-graphql.js';
+
+// Known GraphQL fragments that manifests can reference via ...FragmentName
+const KNOWN_FRAGMENTS = { EventDetails, MessageDetails, MessagePartDetails };
 
 // ===== SSRF Protection =====
 // Block requests to private/internal IP ranges and metadata endpoints
@@ -506,10 +509,18 @@ class Runtime {
     const tokenData = await this.tokenManager.getValidGoogleToken(scopes, null, 'GET', { interactive: this.interactive });
     const accessToken = tokenData.access_token || tokenData;
 
+    // Append any referenced fragment definitions to the query
+    let source = query;
+    for (const [name, definition] of Object.entries(KNOWN_FRAGMENTS)) {
+      if (source.includes(`...${name}`) && !source.includes(`fragment ${name}`)) {
+        source = source + '\n' + definition;
+      }
+    }
+
     // Schema resolvers handle API calls and field filtering via the query AST
     const gqlResult = await graphql({
       schema,
-      source: query,
+      source,
       contextValue: { accessToken, constraints: this.constraints }
     });
 

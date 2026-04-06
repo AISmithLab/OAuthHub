@@ -11,7 +11,7 @@ export const OPERATOR_TYPES = {
       query: { type: 'string', description: 'GraphQL-style query specifying which fields to retrieve' }
     },
     optionalFields: {},
-    example: 'PullEmails(type: "Pull", resourceType: "gmail", query: "{ messages(userId) {snippet} }")',
+    example: 'PullEmails(type: "Pull", resourceType: "gmail", query: "{ messages {snippet} }")',
     notes: 'Supported resource types: google_calendar, gmail, google_drive, google_forms.'
   },
   Select: {
