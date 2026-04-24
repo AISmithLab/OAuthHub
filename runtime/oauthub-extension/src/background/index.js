@@ -462,29 +462,48 @@ async function computeStats() {
   };
 }
 
+function probeGoogleToken(scopes) {
+  return new Promise(resolve => {
+    try {
+      chrome.identity.getAuthToken({ interactive: false, scopes }, token => {
+        if (chrome.runtime.lastError || !token) resolve(null);
+        else resolve(token);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 async function getConnectedServices() {
+  // Source of truth: chrome.identity. If it returns a token non-interactively,
+  // OAuthHub currently has a live OAuth grant with Google for that service.
+  // Auth rows in IndexedDB are only used to surface lastUsed metadata.
+  const tokenManager = new TokenManager();
   const allAuths = await getAllAuthorizations().catch(() => []);
 
-  // Only service-manager connections should appear in the Services panel.
-  const services = {};
-  const now = new Date();
-  const activeServiceAuths = allAuths.filter(auth =>
-    auth.access_type === 'service_connect' && new Date(auth.expiresAt) > now
-  );
-
-  for (const auth of activeServiceAuths) {
-    const provider = auth.provider || 'unknown';
-    if (!services[provider]) {
-      services[provider] = { provider, connections: 0, active: 0, lastUsed: null };
-    }
-    services[provider].connections++;
-    services[provider].active++;
-    const created = new Date(auth.createdAt);
-    if (!services[provider].lastUsed || created > new Date(services[provider].lastUsed)) {
-      services[provider].lastUsed = created.toISOString();
+  const lastUsedByProvider = {};
+  for (const auth of allAuths) {
+    if (!auth.provider || !auth.createdAt) continue;
+    const created = new Date(auth.createdAt).toISOString();
+    if (!lastUsedByProvider[auth.provider] || created > lastUsedByProvider[auth.provider]) {
+      lastUsedByProvider[auth.provider] = created;
     }
   }
-  return Object.values(services);
+
+  const services = [];
+  for (const [provider, scopes] of Object.entries(tokenManager.scopeMap)) {
+    const token = await probeGoogleToken([scopes.read]);
+    if (token) {
+      services.push({
+        provider,
+        connections: 1,
+        active: 1,
+        lastUsed: lastUsedByProvider[provider] || null,
+      });
+    }
+  }
+  return services;
 }
 
 // Listen for OAuth requests (Flow 1 - original implementation)
@@ -661,7 +680,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         // 2. Verify the token actually works by hitting a Google API endpoint
         const verifyEndpoints = {
-          google_calendar: 'https://www.googleapis.com/calendar/v3/calendars/primary',
+          google_calendar: 'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1',
           gmail: 'https://www.googleapis.com/gmail/v1/users/me/profile',
           google_drive: 'https://www.googleapis.com/drive/v3/about?fields=user',
           google_forms: 'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -719,30 +738,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const provider = message.provider;
         const tokenManager = new TokenManager();
 
-        // Only remove long-lived service-manager authorizations for this provider.
-        const allAuths = await getAllAuthorizations();
-        const matchingAuths = allAuths.filter(a =>
-          a.provider === provider && a.access_type === 'service_connect'
-        );
-        const toDelete = matchingAuths.map(a => a.code);
+        // Gather every token we can find for this provider — live cached token
+        // plus any encrypted tokens in auth rows — so we revoke all of them.
+        const tokens = new Set();
 
-        if (toDelete.length > 0) {
-          await deleteAuthorizationCodes(toDelete);
-          for (const code of toDelete) {
-            sessionKeyPairs.delete(code);
-          }
+        const scopeInfo = tokenManager.scopeMap[provider];
+        if (scopeInfo) {
+          const liveToken = await probeGoogleToken([scopeInfo.read]);
+          if (liveToken) tokens.add(liveToken);
         }
 
-        const accessTokens = [];
+        const allAuths = await getAllAuthorizations();
+        const matchingAuths = allAuths.filter(a => a.provider === provider);
         for (const authRecord of matchingAuths) {
           const accessToken = await extractStoredGoogleAccessToken(tokenManager, authRecord);
-          if (accessToken) {
-            accessTokens.push(accessToken);
-          }
+          if (accessToken) tokens.add(accessToken);
         }
 
-        for (const accessToken of accessTokens) {
-          await tokenManager.clearGoogleCachedToken(accessToken);
+        // Revoke at Google so the grant is terminated server-side, not just
+        // forgotten locally. Without this, the next request silently re-issues
+        // a token without a consent prompt.
+        for (const token of tokens) {
+          try {
+            await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            });
+          } catch (revokeError) {
+            console.warn(`Google revoke failed for ${provider}:`, revokeError.message);
+          }
+          await tokenManager.clearGoogleCachedToken(token);
+        }
+
+        if (matchingAuths.length > 0) {
+          await deleteAuthorizationCodes(matchingAuths.map(a => a.code));
+          for (const authRecord of matchingAuths) {
+            sessionKeyPairs.delete(authRecord.code);
+          }
         }
 
         recordLog({ status: 'approved', type: 'disconnect', manifest: provider, initiator: 'user' });
@@ -1727,6 +1759,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
     if (!taskData) {
       console.warn(`Alarm ${alarm.name} fired but no task config found in DB`);
+      await chrome.alarms.clear(alarm.name);
+      return;
+    }
+
+    // Defense-in-depth: refuse to execute if the manifest has been revoked
+    // since the task was registered. enforceConstraints returns
+    // {allowed:true} when no manifest entry is found, so we must check here.
+    const { manifests: currentManifests = [] } = await chrome.storage.local.get('manifests');
+    const manifestStillRegistered = currentManifests.some(m =>
+      m.authCode === taskData.authCode ||
+      (m.provider === taskData.provider && m.manifestText === taskData.manifest)
+    );
+    if (!manifestStillRegistered) {
+      console.warn(`Alarm ${alarm.name} fired but manifest no longer registered — cancelling`);
+      await chrome.alarms.clear(alarm.name);
       return;
     }
 
