@@ -286,6 +286,26 @@ class TokenManager {
     };
   }
 
+  // Non-interactive probe of Play Services credential state. Source of truth
+  // for "which Google services does the user currently have an OAuth grant for".
+  async getGrantedGoogleScopes() {
+    if (!this.googleAuthConfig.clientId) return new Set();
+    try {
+      GoogleSignin.configure({
+        webClientId: this.googleAuthConfig.clientId,
+        offlineAccess: false,
+      });
+      const response = await GoogleSignin.signInSilently();
+      if (response?.type === 'success') {
+        return new Set(response.data?.scopes || []);
+      }
+    } catch {
+      // Play Services unavailable, no saved credential, or misconfigured —
+      // treat as "nothing granted" rather than propagating.
+    }
+    return new Set();
+  }
+
   async getGoogleToken(requiredScopes) {
     const scopes = [...new Set([...this.googleAuthConfig.scopes, ...requiredScopes])];
     try {

@@ -327,20 +327,28 @@ export class MessageHandler {
   // ===== GET_CONNECTED_SERVICES =====
   async handleGetConnectedServices() {
     try {
-      const providers = await storage.getAllKeys('tokens');
-      const manifests = await storage.getAll('manifests');
+      // A provider is "connected" only if both signals agree: a local token row
+      // exists (user hasn't disconnected) AND Play Services still reports the
+      // scope as granted (the grant hasn't been revoked or expired server-side).
+      const [grantedScopes, providersWithTokens, manifests] = await Promise.all([
+        this.tokenManager.getGrantedGoogleScopes(),
+        storage.getAllKeys('tokens'),
+        storage.getAll('manifests'),
+      ]);
+      const providerSet = new Set(providersWithTokens);
 
-      const services = providers
-        .filter(p => p !== 'google' && !p.startsWith('client_'))
-        .map(provider => {
-          const related = manifests.filter(m => m.provider === provider);
-          return {
-            provider,
-            active: related.filter(m => m.enabled).length,
-            connections: related.length,
-            lastUsed: related[0]?.grantedAt,
-          };
+      const services = [];
+      for (const [provider, scopes] of Object.entries(this.tokenManager.scopeMap)) {
+        if (!providerSet.has(provider)) continue;
+        if (!grantedScopes.has(scopes.read) && !grantedScopes.has(scopes.write)) continue;
+        const related = manifests.filter(m => m.provider === provider);
+        services.push({
+          provider,
+          active: related.filter(m => m.enabled).length,
+          connections: related.length,
+          lastUsed: related[0]?.grantedAt,
         });
+      }
 
       return { success: true, services };
     } catch (error) {
@@ -476,6 +484,16 @@ export class MessageHandler {
             endTime: null,
             callback: async () => {
               try {
+                // Defense-in-depth: refuse to execute if the authorization row
+                // has been revoked since the task was registered. The primary
+                // defense is task cancellation in revokeManifest; this guards
+                // against any race or missed cancellation.
+                const stillAuthorized = await storage.get('authorizations', authCode);
+                if (!stillAuthorized) {
+                  console.log(`[Scheduler] ${taskName}: authorization revoked, cancelling task`);
+                  await scheduler.removeTask(taskName);
+                  return;
+                }
                 console.log(`[Scheduler] Executing manifest for ${taskName}`);
                 const runtime = new Runtime();
                 const result = await runtime.executeManifest(manifest);
@@ -545,6 +563,21 @@ export class MessageHandler {
 
   // ===== REVOKE MANIFEST (cascade delete) =====
   async revokeManifest(manifestId) {
+    // Cancel any scheduled background tasks tied to this manifest BEFORE
+    // deleting the auth artifacts they depend on. Task names are
+    // `scheduled_${authCode}_${ts}` and manifestId === authCode, so any task
+    // whose name contains the manifestId belongs to this manifest.
+    try {
+      const tasks = await scheduler.getAllTasks();
+      for (const task of tasks) {
+        if (task.name && task.name.includes(manifestId)) {
+          await scheduler.removeTask(task.name);
+        }
+      }
+    } catch (err) {
+      console.warn('[revokeManifest] Failed to cancel scheduled tasks:', err.message);
+    }
+
     await storage.delete('manifests', manifestId);
     await storage.delete('tokens', `client_${manifestId}`);
     await storage.delete('authorizations', manifestId);
